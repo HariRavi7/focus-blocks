@@ -1,0 +1,225 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'app_state.dart';
+import 'format.dart';
+import 'schedule_engine.dart';
+import 'theme.dart';
+import 'ui/add_task_panel.dart';
+import 'ui/now_view.dart';
+import 'ui/progress_screen.dart';
+import 'ui/schedule_view.dart';
+import 'ui/setup_flow.dart';
+import 'ui/sheets.dart';
+import 'ui/templates_screen.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const ProviderScope(child: FocusBlocksApp()));
+}
+
+class FocusBlocksApp extends StatelessWidget {
+  const FocusBlocksApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Focus Blocks',
+      debugShowCheckedModeBanner: false,
+      theme: buildTheme(),
+      home: const _RootGate(),
+    );
+  }
+}
+
+/// Setup on first run, the app after that.
+class _RootGate extends ConsumerWidget {
+  const _RootGate();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final app = ref.watch(appProvider);
+    return app.when(
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator(color: Brand.cyan))),
+      error: (e, _) => Scaffold(body: Center(child: Text('Could not load your data.\n$e', textAlign: TextAlign.center))),
+      data: (data) => data.onboarded ? const HomeShell() : const SetupFlow(),
+    );
+  }
+}
+
+enum _Section { now, templates, progress }
+
+/// Phone: the Now screen with pushes to the rest.
+/// Mac and wide windows: sidebar, Now card and today's schedule side by side.
+class HomeShell extends ConsumerStatefulWidget {
+  const HomeShell({super.key});
+
+  @override
+  ConsumerState<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends ConsumerState<HomeShell> {
+  final _prompted = <String>{};
+  final _bodyKey = GlobalKey();
+  _Section _section = _Section.now;
+
+  @override
+  void initState() {
+    super.initState();
+    // When a block's time is up, offer "Next Goal!" once per block end.
+    ref.listenManual<TodayView?>(todayProvider, (_, next) => _maybePrompt(next), fireImmediately: true);
+  }
+
+  void _maybePrompt(TodayView? v) {
+    if (v == null || v.snap.phase != Phase.ended) return;
+    final b = v.snap.current;
+    if (b == null) return;
+    final key = '${dateKey(v.date)}-${b.id}-${b.end}';
+    if (!_prompted.add(key)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final ctx = _bodyKey.currentContext ?? context;
+      showTimesUpSheet(ctx, b.id);
+    });
+  }
+
+  void _push(Widget page) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+
+  @override
+  Widget build(BuildContext context) {
+    final view = ref.watch(todayProvider);
+    return LayoutBuilder(
+      builder: (context, c) {
+        final wide = c.maxWidth >= 900;
+        return Scaffold(
+          endDrawer: const AddTaskPanel(),
+          body: GlassBackdrop(
+            color: backdropColorFor(view),
+            child: SafeArea(
+              child: KeyedSubtree(key: _bodyKey, child: wide ? _wide(view) : _phone()),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _phone() => NowView(
+        wide: false,
+        onOpenSchedule: () => _push(const ScheduleScreen()),
+        onOpenProgress: () => _push(const ProgressScreen()),
+        onOpenTemplates: () => _push(const TemplatesScreen()),
+      );
+
+  Widget _wide(TodayView? view) {
+    final Widget center = switch (_section) {
+      _Section.now => NowView(
+          wide: true,
+          onOpenSchedule: () {},
+          onOpenProgress: () => setState(() => _section = _Section.progress),
+          onOpenTemplates: () => setState(() => _section = _Section.templates),
+        ),
+      _Section.templates => const TemplatesScreen(embedded: true),
+      _Section.progress => const ProgressScreen(embedded: true),
+    };
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Sidebar(
+          section: _section,
+          streak: view?.streak ?? 0,
+          onPick: (s) => setState(() => _section = s),
+        ),
+        Expanded(child: center),
+        if (_section == _Section.now)
+          Container(
+            width: 340,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.28),
+              border: Border(left: BorderSide(color: Colors.white.withValues(alpha: 0.8))),
+            ),
+            child: const ScheduleList(compact: true),
+          ),
+      ],
+    );
+  }
+}
+
+class _Sidebar extends StatelessWidget {
+  final _Section section;
+  final int streak;
+  final ValueChanged<_Section> onPick;
+  const _Sidebar({required this.section, required this.streak, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget item(_Section s, IconData icon, String label) {
+      final on = s == section;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Material(
+          color: on ? Colors.white.withValues(alpha: 0.75) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => onPick(s),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(icon, size: 18, color: on ? Brand.cyanDeep : Brand.muted),
+                  const SizedBox(width: 10),
+                  Text(label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: on ? FontWeight.w600 : FontWeight.w500,
+                        color: on ? Brand.ink : Brand.muted,
+                      )),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.fromLTRB(14, 22, 14, 18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.4),
+        border: Border(right: BorderSide(color: Colors.white.withValues(alpha: 0.8))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(left: 8, bottom: 22),
+            child: Row(
+              children: [
+                CircleAvatar(radius: 5, backgroundColor: Brand.cyan),
+                SizedBox(width: 10),
+                Text('Focus Blocks', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+          item(_Section.now, Icons.radio_button_checked_rounded, 'Now'),
+          item(_Section.templates, Icons.view_agenda_outlined, 'Templates'),
+          item(_Section.progress, Icons.insights_rounded, 'Progress'),
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.local_fire_department_outlined, size: 16, color: Brand.cyanDeep),
+                const SizedBox(width: 6),
+                Text('$streak-day streak',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Brand.cyanDeep)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
