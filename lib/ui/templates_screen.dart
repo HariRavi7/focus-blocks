@@ -6,6 +6,7 @@ import '../format.dart';
 import '../models.dart';
 import '../schedule_engine.dart';
 import '../theme.dart';
+import '../platform/notifications.dart';
 import 'common.dart';
 
 String _newId(String prefix) => '$prefix${DateTime.now().microsecondsSinceEpoch}';
@@ -47,6 +48,31 @@ class TemplatesScreen extends ConsumerWidget {
           onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TemplateEditor())),
           icon: const Icon(Icons.add_rounded),
           label: const Text('New template'),
+        ),
+        const SizedBox(height: 28),
+        const SectionLabel('Settings'),
+        const SizedBox(height: 8),
+        Material(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: Color(0xFFE2E8EB)),
+          ),
+          child: SwitchListTile.adaptive(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            activeTrackColor: Brand.cyanDeep,
+            value: data.reminders,
+            title: const Text('15-minute heads-up', style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: const Text(
+              'Before each block and task starts, when 15 minutes are left, and when time is up. '
+              'On Android this also shows a live countdown.',
+              style: TextStyle(fontSize: 13, color: Brand.muted, height: 1.35),
+            ),
+            onChanged: (on) async {
+              await ref.read(appProvider.notifier).setReminders(on);
+              if (on) await NotificationService.instance.requestPermission();
+            },
+          ),
         ),
       ],
     );

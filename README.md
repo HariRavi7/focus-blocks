@@ -19,7 +19,14 @@ One Flutter codebase runs on **Mac, iPhone and Android**.
 
 Everything is saved in a single JSON file on the device. Unfinished tasks carry over to the next run of the same block.
 
-Not yet (milestone 2+): reminders, Mac menu bar, iPhone Live Activity, Android ongoing notification, sync between devices, Google Calendar.
+## Platform extras
+
+- **Reminders (all platforms)**: a heads-up 15 minutes before each block and each later task, "15 min left", and "Time's up". Scheduled for today and tomorrow, and rescheduled whenever the plan changes (extend, add a task, edit a template). Turn them off under **Templates → Settings**.
+- **Android countdown notification**: while a block runs, a silent ongoing notification shows the block, the task in progress, a live countdown to the end and a progress bar, with **Mark done**, **+15 min** and **Open** buttons.
+- **Android home screen widget**: the current block, the task in progress, progress, what's next and your streak. Long-press the home screen → **Widgets** → **Focus Blocks**.
+- **Mac menu bar**: a timer icon with "Cisroute · 42m". Its menu shows the task in progress, **Mark done**, **Extend by 15 min**, what's next, **Open** and **Quit**. Closing the window keeps the app running in the menu bar; click the Dock icon to bring it back.
+
+Not yet: iPhone Live Activity / lock screen, sync between devices, Google Calendar.
 
 ---
 
@@ -55,6 +62,8 @@ brew install cocoapods
 flutter --version
 ```
 
+You need Flutter **3.38.1 or newer** (`flutter upgrade` if it's older).
+
 ### 4. Android Studio (for Android)
 
 ```sh
@@ -88,11 +97,16 @@ cd focus_blocks
 # Generates the ios/, android/ and macos/ folders. Your lib/ and test/ files are left alone.
 flutter create . --platforms=ios,android,macos --org com.cisroute --project-name focus_blocks
 
+# Adds the notification, widget and menu bar pieces to those folders.
+dart run tool/setup_platforms.dart
+
 flutter pub get
 flutter test
 ```
 
-Commit the generated folders afterwards (`git add . && git commit -m "Add platform folders"`), so you only do this once.
+Commit the generated folders afterwards (`git add . && git commit -m "Add platform folders"`), so you only do this once. If you ever regenerate them, run `dart run tool/setup_platforms.dart` again; it's safe to repeat.
+
+The native code lives in `platform/` (Swift for the menu bar, Kotlin and XML for the widget). Edit it there and rerun the script.
 
 ### Run on the Mac
 
@@ -150,6 +164,11 @@ No phone handy? Create an emulator in Android Studio (**Device Manager → Creat
 
 **Your data** is one JSON file in the app's support folder (on the Mac: `~/Library/Containers/com.cisroute.focusBlocks/Data/Library/Application Support/com.cisroute.focusBlocks/focus_blocks.json`). Delete it to start setup again.
 
+### Allowing reminders
+
+- **iPhone / Mac**: the app asks the first time. If you said no, turn them on in **Settings → Notifications → Focus Blocks** (Mac: **System Settings → Notifications**).
+- **Android 13+**: the app asks the first time. For reminders on the exact minute, Android may also need **Settings → Apps → Focus Blocks → Alarms & reminders** turned on; without it they can arrive a few minutes late.
+
 ## Project layout
 
 ```
@@ -163,8 +182,12 @@ lib/
   theme.dart           Colors, glass card, backdrop, segment bar
   quotes.dart          Built-in quotes
   format.dart          Time and date formatting
+  live.dart            What reminders, the widget and the menu bar show
+  platform/            Notifications, menu bar and widget bridges
   ui/                  Screens, sheets and the add-task panel
-test/                  Engine and widget tests
+platform/              Native code copied in by tool/setup_platforms.dart
+tool/                  setup_platforms.dart
+test/                  Engine, reminder and widget tests
 ```
 
 ## Troubleshooting

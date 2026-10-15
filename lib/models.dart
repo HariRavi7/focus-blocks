@@ -207,12 +207,16 @@ class AppData {
   final Map<String, List<TaskItem>> carryOver;
   final List<String> customQuotes;
 
+  /// 15-minute heads-up reminders, the countdown notification and the widget.
+  final bool reminders;
+
   const AppData({
     this.onboarded = false,
     this.templates = const [],
     this.days = const {},
     this.carryOver = const {},
     this.customQuotes = const [],
+    this.reminders = true,
   });
 
   AppData copyWith({
@@ -221,6 +225,7 @@ class AppData {
     Map<String, DayRecord>? days,
     Map<String, List<TaskItem>>? carryOver,
     List<String>? customQuotes,
+    bool? reminders,
   }) =>
       AppData(
         onboarded: onboarded ?? this.onboarded,
@@ -228,6 +233,7 @@ class AppData {
         days: days ?? this.days,
         carryOver: carryOver ?? this.carryOver,
         customQuotes: customQuotes ?? this.customQuotes,
+        reminders: reminders ?? this.reminders,
       );
 
   DayTemplate? templateForWeekday(int weekday) {
@@ -244,6 +250,7 @@ class AppData {
         'days': days.map((k, v) => MapEntry(k, v.toJson())),
         'carryOver': carryOver.map((k, v) => MapEntry(k, v.map((t) => t.toJson()).toList())),
         'customQuotes': customQuotes,
+        'reminders': reminders,
       };
 
   factory AppData.fromJson(Map<String, dynamic> j) => AppData(
@@ -258,5 +265,6 @@ class AppData {
               (v as List).map((e) => TaskItem.fromJson(e as Map<String, dynamic>)).toList(),
             )),
         customQuotes: ((j['customQuotes'] as List?) ?? const []).cast<String>(),
+        reminders: j['reminders'] as bool? ?? true,
       );
 }

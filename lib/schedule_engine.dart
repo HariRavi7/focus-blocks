@@ -1,6 +1,7 @@
 /// Pure scheduling logic: no Flutter imports, fully unit-testable.
 library;
 
+import 'format.dart';
 import 'models.dart';
 
 /// A template block placed on a real day, after extensions have been applied.
@@ -89,6 +90,33 @@ List<PlannedBlock> layoutDay(DayTemplate template, DayRecord record) {
     out.add(PlannedBlock(block: b, start: start, end: end, state: state, usedByExtension: used));
   }
   return out;
+}
+
+/// The record for [day]. A day that hasn't been saved yet is built fresh from
+/// the weekday's template and already holds tasks carried over from the last
+/// run of each block.
+DayRecord dayRecordFor(AppData data, DateTime day) {
+  final key = dateKey(day);
+  final existing = data.days[key];
+  if (existing != null) return existing;
+  final t = data.templateForWeekday(day.weekday);
+  if (t == null) return DayRecord(date: key);
+  final blocks = <String, BlockDayState>{};
+  for (final b in t.blocks) {
+    final carried = data.carryOver[b.id];
+    if (carried != null && carried.isNotEmpty) {
+      blocks[b.id] = BlockDayState(tasks: carried);
+    }
+  }
+  return DayRecord(date: key, templateId: t.id, blocks: blocks);
+}
+
+DayTemplate? templateOf(AppData data, DayRecord record) {
+  if (record.templateId == null) return null;
+  for (final t in data.templates) {
+    if (t.id == record.templateId) return t;
+  }
+  return null;
 }
 
 /// Fills every gap between focus blocks with an explicit free block, so

@@ -67,29 +67,9 @@ class AppController extends AsyncNotifier<AppData> {
 
   /// The record for [now]'s date. Not saved until something changes; a fresh
   /// day already includes tasks carried over from the last run of each block.
-  static DayRecord recordFor(AppData data, DateTime now) {
-    final key = dateKey(now);
-    final existing = data.days[key];
-    if (existing != null) return existing;
-    final t = data.templateForWeekday(now.weekday);
-    if (t == null) return DayRecord(date: key);
-    final blocks = <String, BlockDayState>{};
-    for (final b in t.blocks) {
-      final carried = data.carryOver[b.id];
-      if (carried != null && carried.isNotEmpty) {
-        blocks[b.id] = BlockDayState(tasks: carried);
-      }
-    }
-    return DayRecord(date: key, templateId: t.id, blocks: blocks);
-  }
+  static DayRecord recordFor(AppData data, DateTime now) => dayRecordFor(data, now);
 
-  static DayTemplate? templateFor(AppData data, DayRecord record) {
-    if (record.templateId == null) return null;
-    for (final t in data.templates) {
-      if (t.id == record.templateId) return t;
-    }
-    return null;
-  }
+  static DayTemplate? templateFor(AppData data, DayRecord record) => templateOf(data, record);
 
   /// Changes one block in today's record and saves.
   /// [carryFor] sets the tasks waiting for this block's next run
@@ -118,8 +98,12 @@ class AppController extends AsyncNotifier<AppData> {
 
   // ---------- Setup & templates ----------
 
-  Future<void> finishSetup(List<DayTemplate> templates) async {
-    await _commit(_data.copyWith(onboarded: true, templates: templates));
+  Future<void> finishSetup(List<DayTemplate> templates, {bool reminders = true}) async {
+    await _commit(_data.copyWith(onboarded: true, templates: templates, reminders: reminders));
+  }
+
+  Future<void> setReminders(bool on) async {
+    await _commit(_data.copyWith(reminders: on));
   }
 
   /// Saves a template. A weekday belongs to one template, so any day picked

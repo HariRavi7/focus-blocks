@@ -6,6 +6,7 @@ import '../format.dart';
 import '../models.dart';
 import '../schedule_engine.dart';
 import '../theme.dart';
+import '../platform/notifications.dart';
 import 'common.dart';
 import 'templates_screen.dart';
 
@@ -49,6 +50,7 @@ class SetupFlow extends ConsumerStatefulWidget {
 class _SetupFlowState extends ConsumerState<SetupFlow> {
   int _step = 0; // 0 welcome, 1 weekday, 2 weekend, 3 done
   bool _skipWeekend = false;
+  bool _reminders = true;
   int _seq = 0;
   final _drafts = [_Draft('Weekday', {1, 2, 3, 4, 5}), _Draft('Weekend', {6, 7})];
 
@@ -106,7 +108,8 @@ class _SetupFlowState extends ConsumerState<SetupFlow> {
   }
 
   Future<void> _finish() async {
-    await ref.read(appProvider.notifier).finishSetup(_build());
+    if (_reminders) await NotificationService.instance.requestPermission();
+    await ref.read(appProvider.notifier).finishSetup(_build(), reminders: _reminders);
   }
 
   @override
@@ -347,8 +350,21 @@ class _SetupFlowState extends ConsumerState<SetupFlow> {
           _summaryRow(t.name, '${formatWeekdays(t.weekdays)} · ${t.blocks.where((b) => !b.isFree).length} blocks'),
         if (freeDays.isNotEmpty) _summaryRow('Free days', freeDays.join(', ')),
         const SizedBox(height: 22),
-        const Text('Reminders and Google Calendar sync arrive in the next update.',
-            style: TextStyle(fontSize: 13, color: Brand.muted)),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.75),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white),
+          ),
+          child: SwitchListTile.adaptive(
+            activeTrackColor: Brand.cyanDeep,
+            value: _reminders,
+            onChanged: (v) => setState(() => _reminders = v),
+            title: const Text('15-minute heads-up', style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: const Text('Before each block and task starts, and when 15 minutes are left.',
+                style: TextStyle(fontSize: 13, color: Brand.muted)),
+          ),
+        ),
         const SizedBox(height: 28),
         const QuoteText(text: 'Show up today. That is the whole trick.', source: '', color: Brand.ink, size: 18),
       ],

@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_state.dart';
 import 'format.dart';
 import 'schedule_engine.dart';
+import 'platform/platform_sync.dart';
 import 'theme.dart';
 import 'ui/add_task_panel.dart';
+import 'ui/common.dart';
 import 'ui/now_view.dart';
 import 'ui/progress_screen.dart';
 import 'ui/schedule_view.dart';
@@ -62,12 +64,52 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   final _prompted = <String>{};
   final _bodyKey = GlobalKey();
   _Section _section = _Section.now;
+  late final PlatformSync _platform = PlatformSync(ref);
 
   @override
   void initState() {
     super.initState();
     // When a block's time is up, offer "Next Goal!" once per block end.
-    ref.listenManual<TodayView?>(todayProvider, (_, next) => _maybePrompt(next), fireImmediately: true);
+    // Every tick also refreshes the menu bar, notifications and widget.
+    ref.listenManual<TodayView?>(todayProvider, (_, next) {
+      _maybePrompt(next);
+      _platform.push(next);
+    }, fireImmediately: true);
+    _platform.start(onAction: (a) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _onAction(a);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _platform.dispose();
+    super.dispose();
+  }
+
+  /// Buttons from the Android notification and the Mac menu bar.
+  void _onAction(String action) {
+    final v = ref.read(todayProvider);
+    final cur = v?.snap.current;
+    if (v == null || cur == null) return;
+    final c = ref.read(appProvider.notifier);
+    final ctx = _bodyKey.currentContext ?? context;
+    switch (action) {
+      case 'done':
+        final slot = v.snap.phase == Phase.running ? currentTaskSlot(cur) : null;
+        if (slot != null) {
+          c.toggleTask(cur.id, slot.task.id);
+          showToast(ctx, 'Done: ${slot.task.title}');
+        } else {
+          showReviewSheet(ctx, cur.id);
+        }
+      case 'extend':
+        c.extend(cur.id, 15);
+        showToast(ctx, 'Extended by 15 min');
+      case 'wrap':
+        if (v.snap.phase == Phase.ended) showTimesUpSheet(ctx, cur.id);
+    }
   }
 
   void _maybePrompt(TodayView? v) {
