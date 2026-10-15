@@ -101,6 +101,9 @@ flutter create . --platforms=ios,android,macos --org com.cisroute --project-name
 dart run tool/setup_platforms.dart
 
 flutter pub get
+
+# Puts the app icon (assets/icon/) on Android, iPhone and Mac.
+dart run flutter_launcher_icons
 flutter test
 ```
 

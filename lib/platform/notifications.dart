@@ -70,7 +70,8 @@ class NotificationService {
       );
       await _plugin.initialize(
         settings: const InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          // White silhouette of the app mark, added by tool/setup_platforms.dart.
+          android: AndroidInitializationSettings('@drawable/ic_stat_focus'),
           iOS: darwin,
           macOS: darwin,
         ),
