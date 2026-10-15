@@ -5,13 +5,14 @@
     android:height="24dp"
     android:viewportWidth="1024"
     android:viewportHeight="1024">
+    <group android:translateX="-12">
     <path
         android:pathData="M405.2 329.2 A232 232 0 1 1 405.2 694.8"
         android:strokeWidth="80"
         android:strokeColor="#FFFFFFFF"
         android:strokeLineCap="round" />
     <path
-        android:pathData="M278 382 L404 512 L278 642"
+        android:pathData="M240 512 H408 M318 420 L410 512 L318 604"
         android:strokeWidth="80"
         android:strokeColor="#FFFFFFFF"
         android:strokeLineCap="round"
@@ -19,4 +20,5 @@
     <path
         android:pathData="M480 512 A68 68 0 1 0 616 512 A68 68 0 1 0 480 512 Z"
         android:fillColor="#FFFFFFFF" />
+    </group>
 </vector>
