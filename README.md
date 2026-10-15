@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/icon/icon_android.png" width="120" alt="Focus Blocks icon"></p>
+
 # Focus Blocks
 
 Time-blocking that rewards showing up. Plan your day in blocks from a template, focus on the block you're in, and keep a streak going.
