@@ -4,6 +4,8 @@
 /// schedule maths stays simple and time-zone free.
 library;
 
+import 'pomodoro.dart';
+
 enum BlockKind { focus, free }
 
 /// Colors a block can use. `auto` picks one from the block's time of day.
@@ -210,6 +212,14 @@ class AppData {
   /// 15-minute heads-up reminders, the countdown notification and the widget.
   final bool reminders;
 
+  final PomodoroSettings pomodoroSettings;
+
+  /// The Pomodoro timer that is running or paused, if any.
+  final PomodoroTimer? pomodoro;
+
+  /// Every focus round, oldest first.
+  final List<PomodoroSession> pomodoros;
+
   const AppData({
     this.onboarded = false,
     this.templates = const [],
@@ -217,8 +227,13 @@ class AppData {
     this.carryOver = const {},
     this.customQuotes = const [],
     this.reminders = true,
+    this.pomodoroSettings = const PomodoroSettings(),
+    this.pomodoro,
+    this.pomodoros = const [],
   });
 
+  /// [clearPomodoro] removes the running timer ([pomodoro] can't be set to
+  /// null through copyWith otherwise).
   AppData copyWith({
     bool? onboarded,
     List<DayTemplate>? templates,
@@ -226,6 +241,10 @@ class AppData {
     Map<String, List<TaskItem>>? carryOver,
     List<String>? customQuotes,
     bool? reminders,
+    PomodoroSettings? pomodoroSettings,
+    PomodoroTimer? pomodoro,
+    bool clearPomodoro = false,
+    List<PomodoroSession>? pomodoros,
   }) =>
       AppData(
         onboarded: onboarded ?? this.onboarded,
@@ -234,6 +253,9 @@ class AppData {
         carryOver: carryOver ?? this.carryOver,
         customQuotes: customQuotes ?? this.customQuotes,
         reminders: reminders ?? this.reminders,
+        pomodoroSettings: pomodoroSettings ?? this.pomodoroSettings,
+        pomodoro: clearPomodoro ? null : (pomodoro ?? this.pomodoro),
+        pomodoros: pomodoros ?? this.pomodoros,
       );
 
   DayTemplate? templateForWeekday(int weekday) {
@@ -251,6 +273,9 @@ class AppData {
         'carryOver': carryOver.map((k, v) => MapEntry(k, v.map((t) => t.toJson()).toList())),
         'customQuotes': customQuotes,
         'reminders': reminders,
+        'pomodoroSettings': pomodoroSettings.toJson(),
+        if (pomodoro != null) 'pomodoro': pomodoro!.toJson(),
+        'pomodoros': pomodoros.map((p) => p.toJson()).toList(),
       };
 
   factory AppData.fromJson(Map<String, dynamic> j) => AppData(
@@ -266,5 +291,12 @@ class AppData {
             )),
         customQuotes: ((j['customQuotes'] as List?) ?? const []).cast<String>(),
         reminders: j['reminders'] as bool? ?? true,
+        pomodoroSettings: j['pomodoroSettings'] == null
+            ? const PomodoroSettings()
+            : PomodoroSettings.fromJson(j['pomodoroSettings'] as Map<String, dynamic>),
+        pomodoro: j['pomodoro'] == null ? null : PomodoroTimer.fromJson(j['pomodoro'] as Map<String, dynamic>),
+        pomodoros: ((j['pomodoros'] as List?) ?? const [])
+            .map((e) => PomodoroSession.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }

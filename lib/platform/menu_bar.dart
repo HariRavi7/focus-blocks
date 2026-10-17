@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../format.dart';
 import '../live.dart';
+import '../pomodoro.dart';
 
 /// The Mac menu bar item. The native side (macos/Runner/MainFlutterWindow.swift)
 /// draws it; this sends the title and menu, and receives clicks.
@@ -21,7 +22,8 @@ class MenuBarService {
 
   bool get supported => !kIsWeb && Platform.isMacOS;
 
-  /// Menu items clicked ("done", "extend", "wrap").
+  /// Menu items clicked ("done", "extend", "wrap", "pomo_start",
+  /// "pomo_pause", "pomo_skip", "pomo_stop").
   Stream<String> get actions => _actions.stream;
 
   void init() {
@@ -33,9 +35,12 @@ class MenuBarService {
     });
   }
 
-  void update(LiveStatus s) {
+  /// While a Pomodoro is on, the title shows its countdown instead of the
+  /// block; the menu leads with the timer controls.
+  void update(LiveStatus s, {PomodoroTimer? pomodoro, DateTime? now}) {
     if (!supported) return;
-    final payload = <String, Object?>{'title': s.menuBarTitle, 'items': _items(s)};
+    final title = pomodoro == null ? s.menuBarTitle : pomodoroMenuTitle(pomodoro, now ?? DateTime.now());
+    final payload = <String, Object?>{'title': title, 'items': menuItems(s, pomodoro)};
     final sig = jsonEncode(payload);
     if (sig == _sig) return;
     _sig = sig;
@@ -49,8 +54,24 @@ class MenuBarService {
   static Map<String, Object?> _action(String id, String label) => {'id': id, 'label': label};
   static const Map<String, Object?> _separator = {'separator': true};
 
-  static List<Map<String, Object?>> _items(LiveStatus s) {
+  /// The menu. Kept free of the seconds countdown, so it only changes when
+  /// something in it does (the title carries the countdown).
+  static List<Map<String, Object?>> menuItems(LiveStatus s, PomodoroTimer? p) {
     final items = <Map<String, Object?>>[];
+    if (p != null) {
+      final subject = pomodoroSubject(p);
+      final round = p.phase.isBreak ? p.phase.label : 'Focus · round ${p.round}';
+      items.add(_info(subject.isEmpty ? round : '$round · $subject'));
+      if (p.running) {
+        items.add(_info('Ends at ${formatTime(p.endsAt!.hour * 60 + p.endsAt!.minute)}'));
+        items.add(_action('pomo_pause', 'Pause'));
+      } else {
+        items.add(_action('pomo_start', p.started ? 'Resume' : (p.phase.isBreak ? 'Start break' : 'Start focus')));
+      }
+      items.add(_action('pomo_skip', p.phase.isBreak ? 'Skip break' : 'Skip to break'));
+      items.add(_action('pomo_stop', 'Stop Pomodoro'));
+      items.add(_separator);
+    }
     switch (s.kind) {
       case LiveKind.running:
         items.add(_info('${s.blockName} · until ${formatTime(s.end)}'));
@@ -61,13 +82,16 @@ class MenuBarService {
           items.add(_action('done', 'Mark “${s.taskTitle}” done'));
         }
         items.add(_action('extend', 'Extend by 15 min'));
+        if (p == null) items.add(_action('pomo_start', 'Start a Pomodoro'));
       case LiveKind.ended:
         items.add(_info("${s.blockName} · time's up"));
         items.add(_action('wrap', 'Wrap up…'));
       case LiveKind.upNext:
         items.add(_info('Up next: ${s.nextName} at ${formatTime(s.nextStart ?? 0)}'));
+        if (p == null) items.add(_action('pomo_start', 'Start a Pomodoro'));
       case LiveKind.idle:
         items.add(_info("That's the day. Nothing else planned."));
+        if (p == null) items.add(_action('pomo_start', 'Start a Pomodoro'));
     }
     if (s.kind != LiveKind.upNext && s.nextName != null) {
       items.add(_separator);

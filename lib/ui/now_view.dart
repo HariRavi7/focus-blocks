@@ -7,6 +7,7 @@ import '../quotes.dart';
 import '../schedule_engine.dart';
 import '../theme.dart';
 import 'common.dart';
+import 'pomodoro_view.dart';
 import 'sheets.dart';
 
 /// The color the screen glows in: the current block, else the next one.
@@ -44,12 +45,14 @@ List<({int minutes, double fill, bool open})> blockSegments(PlannedBlock b, int 
 
 class NowView extends ConsumerStatefulWidget {
   final bool wide;
+  final VoidCallback onOpenPomodoro;
   final VoidCallback onOpenSchedule;
   final VoidCallback onOpenProgress;
   final VoidCallback onOpenTemplates;
   const NowView({
     super.key,
     required this.wide,
+    required this.onOpenPomodoro,
     required this.onOpenSchedule,
     required this.onOpenProgress,
     required this.onOpenTemplates,
@@ -79,7 +82,8 @@ class _NowViewState extends ConsumerState<NowView> {
     final quote = _quoteFor(view);
 
     final Widget card = switch (view.snap.phase) {
-      Phase.running => _RunningCard(view: view, block: view.snap.current!, quote: quote),
+      Phase.running =>
+        _RunningCard(view: view, block: view.snap.current!, quote: quote, onOpenPomodoro: widget.onOpenPomodoro),
       Phase.ended => _EndedCard(view: view, block: view.snap.current!),
       Phase.upNext => _InfoCard(
           color: paletteFor(view.snap.next!).dot,
@@ -118,11 +122,27 @@ class _NowViewState extends ConsumerState<NowView> {
               children: [
                 Text(formatHeaderDate(view.date), style: const TextStyle(fontSize: 13, color: Brand.muted)),
                 const SizedBox(height: 4),
-                _StreakChip(streak: view.streak, onTap: widget.onOpenProgress),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _StreakChip(streak: view.streak, onTap: widget.onOpenProgress),
+                    PomodoroChip(onTap: widget.onOpenPomodoro),
+                  ],
+                ),
               ],
             ),
           ),
-          if (!widget.wide)
+          if (!widget.wide) ...[
+            ClearGlass(
+              radius: BorderRadius.circular(999),
+              child: IconButton(
+                tooltip: 'Pomodoro',
+                onPressed: widget.onOpenPomodoro,
+                icon: const Icon(Icons.timer_outlined, size: 20),
+              ),
+            ),
+            const SizedBox(width: 8),
             ClearGlass(
               radius: BorderRadius.circular(999),
               child: InkWell(
@@ -140,6 +160,7 @@ class _NowViewState extends ConsumerState<NowView> {
                 ),
               ),
             ),
+          ],
         ],
       ),
     );
@@ -202,7 +223,8 @@ class _RunningCard extends ConsumerWidget {
   final TodayView view;
   final PlannedBlock block;
   final Quote quote;
-  const _RunningCard({required this.view, required this.block, required this.quote});
+  final VoidCallback onOpenPomodoro;
+  const _RunningCard({required this.view, required this.block, required this.quote, required this.onOpenPomodoro});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -278,13 +300,21 @@ class _RunningCard extends ConsumerWidget {
                 position: PopupMenuPosition.over,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 color: Colors.white,
-                onSelected: (v) {
+                onSelected: (v) async {
                   if (v == 'finish') showReviewSheet(context, block.id);
                   if (v == 'skip') showSkipSheet(context, block.id);
+                  if (v == 'pomodoro') {
+                    if (ref.read(appProvider).valueOrNull?.pomodoro == null) await startPomodoroNow(ref);
+                    onOpenPomodoro();
+                  }
                 },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'finish', child: Text('Finish early')),
-                  PopupMenuItem(value: 'skip', child: Text('Skip this block', style: TextStyle(color: Brand.warn))),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'pomodoro',
+                    child: Text(ref.read(appProvider).valueOrNull?.pomodoro == null ? 'Start a Pomodoro' : 'Open Pomodoro'),
+                  ),
+                  const PopupMenuItem(value: 'finish', child: Text('Finish early')),
+                  const PopupMenuItem(value: 'skip', child: Text('Skip this block', style: TextStyle(color: Brand.warn))),
                 ],
               ),
             ),

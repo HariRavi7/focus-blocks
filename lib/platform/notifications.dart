@@ -18,6 +18,7 @@ class NotificationService {
   static final instance = NotificationService._();
 
   static const _ongoingId = 1;
+  static const _pomodoroId = 2;
   static const _reminderChannel = AndroidNotificationDetails(
     'reminders',
     'Reminders',
@@ -42,6 +43,7 @@ class NotificationService {
   // (and clears anything left over from the last run).
   String? _scheduledSig = '<startup>';
   String? _ongoingSig = '<startup>';
+  String? _pomodoroSig = '<startup>';
   String? _launchAction;
   Future<void> _queue = Future.value();
 
@@ -230,14 +232,46 @@ class NotificationService {
     );
   }
 
-  /// Turns everything off (reminders setting switched off).
+  /// The alert for when the running Pomodoro phase runs out. Pass null to
+  /// cancel it (paused or stopped). Kept separate from the block reminders,
+  /// so it still rings when those are turned off.
+  void schedulePomodoro(PlannedReminder? r) {
+    final sig = r == null ? null : '${r.at.millisecondsSinceEpoch}|${r.title}|${r.body}';
+    if (sig == _pomodoroSig) return;
+    _pomodoroSig = sig;
+    _queue = _queue.then((_) async {
+      await init();
+      if (!_ready) return;
+      // Only cancel one still waiting: cancelling also pulls a delivered
+      // alert out of Notification Center, and the one that just rang should stay.
+      final pending = await _plugin.pendingNotificationRequests();
+      if (pending.any((p) => p.id == _pomodoroId)) await _plugin.cancel(id: _pomodoroId);
+      if (r == null || !r.at.isAfter(DateTime.now())) return;
+      await _plugin.zonedSchedule(
+        id: _pomodoroId,
+        title: r.title,
+        body: r.body,
+        scheduledDate: tz.TZDateTime.from(r.at, tz.UTC),
+        notificationDetails: _reminderDetails,
+        androidScheduleMode: _mode,
+      );
+    }).catchError((Object e) => debugPrint('Pomodoro alert failed: $e'));
+  }
+
+  /// Turns the block reminders and the countdown off (reminders setting
+  /// switched off). The Pomodoro alert is left alone.
   void clearAll() {
     if (_scheduledSig == null && _ongoingSig == null) return;
     _scheduledSig = null;
     _ongoingSig = null;
     _queue = _queue.then((_) async {
       await init();
-      if (_ready) await _plugin.cancelAll();
+      if (!_ready) return;
+      final pending = await _plugin.pendingNotificationRequests();
+      for (final p in pending) {
+        if (p.id != _pomodoroId) await _plugin.cancel(id: p.id);
+      }
+      await _plugin.cancel(id: _ongoingId);
     }).catchError((Object e) => debugPrint('Clearing notifications failed: $e'));
   }
 }

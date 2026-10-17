@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app_state.dart';
 import '../format.dart';
 import '../models.dart';
+import '../pomodoro.dart';
 import '../stats.dart';
 import '../theme.dart';
 import 'common.dart';
@@ -18,6 +19,7 @@ class ProgressScreen extends ConsumerWidget {
     final data = ref.watch(appProvider).valueOrNull ?? const AppData();
     final now = ref.watch(clockProvider).valueOrNull ?? DateTime.now();
     final s = computeStats(data, now);
+    final p = pomodoroStats(data.pomodoros, now);
     final maxMinutes = s.minutesByName.isEmpty ? 1 : s.minutesByName.first.value;
 
     final body = ListView(
@@ -76,6 +78,14 @@ class ProgressScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 10),
         _Number(label: 'Time you showed up for', value: formatDuration(s.focusMinutes)),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(child: _Number(label: 'Pomodoros this week', value: '${p.week}')),
+            const SizedBox(width: 10),
+            Expanded(child: _Number(label: 'Pomodoro focus, all time', value: formatDuration(p.totalMinutes))),
+          ],
+        ),
         const SizedBox(height: 14),
         _Panel(
           title: 'Where the time went',

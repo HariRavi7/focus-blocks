@@ -28,6 +28,7 @@ final class MenuBarController: NSObject {
   private let statusItem: NSStatusItem
   private let channel: FlutterMethodChannel
   private weak var window: NSWindow?
+  private var lastItems: NSArray?
 
   init(messenger: FlutterBinaryMessenger, window: NSWindow) {
     statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -68,11 +69,18 @@ final class MenuBarController: NSObject {
     if let button = statusItem.button {
       if #available(macOS 11.0, *) {
         button.title = title.isEmpty ? "" : " " + title
+        // Fixed-width digits so the countdown doesn't jiggle.
+        button.font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
       } else {
         button.title = title.isEmpty ? "Focus" : title
       }
     }
+    // The title ticks every second during a Pomodoro; only rebuild the menu
+    // when its items change, so an open menu isn't swapped out.
     let items = args["items"] as? [[String: Any]] ?? []
+    let itemsArray = items as NSArray
+    if let last = lastItems, last.isEqual(itemsArray) { return }
+    lastItems = itemsArray
     statusItem.menu = buildMenu(items)
   }
 
