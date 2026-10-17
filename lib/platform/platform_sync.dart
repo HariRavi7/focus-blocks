@@ -31,7 +31,7 @@ class PlatformSync {
     final data = ref.read(appProvider).valueOrNull;
     if (view == null || data == null) return;
     final status = liveStatus(view.snap, view.date);
-    MenuBarService.instance.update(status);
+    MenuBarService.instance.update(status, pomodoro: data.pomodoro, now: view.date);
     HomeWidgetSync.instance.update(
       status,
       streak: view.streak,
@@ -40,6 +40,7 @@ class PlatformSync {
     );
     final n = NotificationService.instance;
     if (!n.supported) return;
+    n.schedulePomodoro(pomodoroAlert(data));
     if (data.reminders) {
       n.schedule(planReminders(data, view.date));
       n.showOngoing(status);

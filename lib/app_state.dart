@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'format.dart';
 import 'models.dart';
+import 'pomodoro.dart';
 import 'schedule_engine.dart';
 import 'storage.dart';
 
@@ -31,6 +32,37 @@ final todayProvider = Provider<TodayView?>((ref) {
     streak: currentStreak(data.days, now, dateKey),
   );
 });
+
+/// The Pomodoro timer as of this second, plus settings and today's numbers.
+final pomodoroProvider = Provider<PomodoroView?>((ref) {
+  final data = ref.watch(appProvider).valueOrNull;
+  final now = ref.watch(clockProvider).valueOrNull ?? DateTime.now();
+  if (data == null) return null;
+  return PomodoroView(
+    now: now,
+    timer: data.pomodoro,
+    settings: data.pomodoroSettings,
+    stats: pomodoroStats(data.pomodoros, now),
+    today: data.pomodoros.where((p) => p.date == dateKey(now)).toList(),
+  );
+});
+
+class PomodoroView {
+  final DateTime now;
+  final PomodoroTimer? timer;
+  final PomodoroSettings settings;
+  final PomodoroStats stats;
+  final List<PomodoroSession> today; // oldest first
+  const PomodoroView({
+    required this.now,
+    required this.timer,
+    required this.settings,
+    required this.stats,
+    required this.today,
+  });
+
+  int get secondsLeft => timer?.secondsLeft(now) ?? settings.focusMinutes * 60;
+}
 
 class TodayView {
   final DateTime date;
@@ -231,5 +263,95 @@ class AppController extends AsyncNotifier<AppData> {
     final record = recordFor(_data, DateTime.now());
     final open = record.stateFor(blockId).tasks.where((t) => !t.done).toList();
     await _updateBlock(blockId, change, carryFor: open);
+  }
+
+  // ---------- Pomodoro ----------
+
+  PomodoroTimer? get _pomodoro => _data.pomodoro;
+
+  /// Starts a focus round, or resumes a paused timer. A new round picks up
+  /// [label] and the block and task it belongs to.
+  Future<void> startPomodoro({
+    String label = '',
+    String? blockId,
+    String? blockName,
+    String? taskId,
+    String? taskTitle,
+  }) async {
+    final now = DateTime.now();
+    final cur = _pomodoro;
+    final PomodoroTimer next;
+    if (cur == null) {
+      next = startTimer(
+        newFocus(_data.pomodoroSettings,
+            label: label, blockId: blockId, blockName: blockName, taskId: taskId, taskTitle: taskTitle),
+        now,
+      );
+    } else {
+      next = startTimer(cur, now);
+    }
+    await _commit(_data.copyWith(pomodoro: next));
+  }
+
+  Future<void> pausePomodoro() async {
+    final cur = _pomodoro;
+    if (cur == null) return;
+    await _commit(_data.copyWith(pomodoro: pauseTimer(cur, DateTime.now())));
+  }
+
+  Future<void> togglePomodoro() async {
+    final cur = _pomodoro;
+    if (cur != null && cur.running) return pausePomodoro();
+    return startPomodoro();
+  }
+
+  /// Ends this phase now and moves to the next one. A focus round cut short
+  /// is still logged with the minutes you put in.
+  Future<void> skipPomodoro() async {
+    final cur = _pomodoro;
+    if (cur == null) return;
+    final now = DateTime.now();
+    final session = sessionFor(cur, now, completed: false, id: newId('p'));
+    await _commit(_data.copyWith(
+      pomodoro: nextPhase(cur, _data.pomodoroSettings, now),
+      pomodoros: session == null ? null : [..._data.pomodoros, session],
+    ));
+  }
+
+  /// Stops the timer. A focus round cut short is still logged.
+  Future<void> stopPomodoro() async {
+    final cur = _pomodoro;
+    if (cur == null) return;
+    final session = sessionFor(cur, DateTime.now(), completed: false, id: newId('p'));
+    await _commit(_data.copyWith(
+      clearPomodoro: true,
+      pomodoros: session == null ? null : [..._data.pomodoros, session],
+    ));
+  }
+
+  /// Changes what the current round is for.
+  Future<void> setPomodoroLabel(String label) async {
+    final cur = _pomodoro;
+    if (cur == null) return;
+    await _commit(_data.copyWith(pomodoro: cur.withLabel(label)));
+  }
+
+  /// Saves new lengths. A phase that hasn't started yet takes the new length.
+  Future<void> setPomodoroSettings(PomodoroSettings s) async {
+    var cur = _pomodoro;
+    if (cur != null && !cur.started) {
+      cur = cur.withLength(s.minutesFor(cur.phase) * 60);
+    }
+    await _commit(_data.copyWith(pomodoroSettings: s, pomodoro: cur));
+  }
+
+  /// Called every tick: moves past any phase that has run out and logs the
+  /// finished focus rounds. Returns what happened, or null if nothing did.
+  Future<PomodoroAdvance?> advancePomodoro(DateTime now) async {
+    final cur = _pomodoro;
+    if (cur == null || !cur.isOver(now)) return null;
+    final a = advanceTimer(cur, _data.pomodoroSettings, now, () => newId('p'));
+    await _commit(_data.copyWith(pomodoro: a.timer, pomodoros: [..._data.pomodoros, ...a.sessions]));
+    return a;
   }
 }

@@ -19,6 +19,15 @@ One Flutter codebase runs on **Mac, iPhone and Android**.
 - **Progress**: current and longest streak, this week, totals, where the time went, why blocks were skipped.
 - **Mac / wide windows**: a sidebar, the Now card and today's schedule side by side.
 
+## Pomodoro timer
+
+- **Pomodoro** in the Mac sidebar (on iPhone and Android, the timer button next to *Today's schedule*): a ring countdown with **Start / Pause / Resume**, **Skip** and **Stop**. Press **Space** to start or pause.
+- 25 min focus, 5 min break, and a 15 min long break after every 4 rounds. Change the lengths, the number of rounds, and whether breaks or the next round start on their own under the **settings** button (there's a 50 / 10 deep-work preset too).
+- Type what you're working on, or leave it blank: started during a block, the round is linked to that block and the task in progress. **••• → Start a Pomodoro** on the Now card does the same.
+- **Mac menu bar**: while a timer is on, the menu bar shows "Focus 18:42" (or "Break", "Paused") and its menu has **Pause / Resume**, **Skip** and **Stop**. When no timer is on, **Start a Pomodoro** is in the menu.
+- An alert rings when a round or break ends, even with block reminders turned off. The timer keeps the right time if you close the window or the Mac sleeps.
+- Every focus round is logged with its start and end time, the minutes you put in (pauses don't count), whether it ran to the end, and the block and task it belonged to. Today's rounds show under the timer, and **Progress** shows Pomodoros this week and your total Pomodoro focus time.
+
 Everything is saved in a single JSON file on the device. Unfinished tasks carry over to the next run of the same block.
 
 ## Platform extras
@@ -188,11 +197,12 @@ lib/
   quotes.dart          Built-in quotes
   format.dart          Time and date formatting
   live.dart            What reminders, the widget and the menu bar show
+  pomodoro.dart        Pomodoro timer, settings and the focus-round log
   platform/            Notifications, menu bar and widget bridges
   ui/                  Screens, sheets and the add-task panel
 platform/              Native code copied in by tool/setup_platforms.dart
 tool/                  setup_platforms.dart
-test/                  Engine, reminder and widget tests
+test/                  Engine, reminder, Pomodoro and widget tests
 ```
 
 ## Troubleshooting

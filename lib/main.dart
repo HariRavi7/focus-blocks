@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_state.dart';
 import 'format.dart';
+import 'pomodoro.dart';
 import 'schedule_engine.dart';
 import 'platform/platform_sync.dart';
 import 'theme.dart';
 import 'ui/add_task_panel.dart';
 import 'ui/common.dart';
 import 'ui/now_view.dart';
+import 'ui/pomodoro_view.dart';
 import 'ui/progress_screen.dart';
 import 'ui/schedule_view.dart';
 import 'ui/setup_flow.dart';
@@ -49,7 +51,7 @@ class _RootGate extends ConsumerWidget {
   }
 }
 
-enum _Section { now, templates, progress }
+enum _Section { now, pomodoro, templates, progress }
 
 /// Phone: the Now screen with pushes to the rest.
 /// Mac and wide windows: sidebar, Now card and today's schedule side by side.
@@ -75,6 +77,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       _maybePrompt(next);
       _platform.push(next);
     }, fireImmediately: true);
+    // Move the Pomodoro on when a phase runs out, and say so.
+    ref.listenManual<AsyncValue<DateTime>>(clockProvider, (_, next) {
+      final now = next.valueOrNull;
+      if (now != null) _advancePomodoro(now);
+    });
     _platform.start(onAction: (a) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _onAction(a);
@@ -88,8 +95,46 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     super.dispose();
   }
 
+  bool _advancing = false;
+
+  Future<void> _advancePomodoro(DateTime now) async {
+    if (_advancing) return;
+    final before = ref.read(appProvider).valueOrNull;
+    final t = before?.pomodoro;
+    if (before == null || t == null || !t.isOver(now)) return;
+    _advancing = true;
+    try {
+      final message = phaseEndMessage(t, before.pomodoroSettings);
+      final a = await ref.read(appProvider.notifier).advancePomodoro(now);
+      if (a == null || !mounted) return;
+      final ctx = _bodyKey.currentContext ?? context;
+      if (ctx.mounted) showToast(ctx, '${message.title}. ${message.body}');
+    } finally {
+      _advancing = false;
+    }
+  }
+
   /// Buttons from the Android notification and the Mac menu bar.
   void _onAction(String action) {
+    final c0 = ref.read(appProvider.notifier);
+    switch (action) {
+      case 'pomo_start':
+        if (ref.read(appProvider).valueOrNull?.pomodoro == null) {
+          startPomodoroNow(ref);
+        } else {
+          c0.startPomodoro();
+        }
+        return;
+      case 'pomo_pause':
+        c0.pausePomodoro();
+        return;
+      case 'pomo_skip':
+        c0.skipPomodoro();
+        return;
+      case 'pomo_stop':
+        c0.stopPomodoro();
+        return;
+    }
     final v = ref.read(todayProvider);
     final cur = v?.snap.current;
     if (v == null || cur == null) return;
@@ -148,6 +193,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   Widget _phone() => NowView(
         wide: false,
+        onOpenPomodoro: () => _push(const PomodoroScreen()),
         onOpenSchedule: () => _push(const ScheduleScreen()),
         onOpenProgress: () => _push(const ProgressScreen()),
         onOpenTemplates: () => _push(const TemplatesScreen()),
@@ -157,10 +203,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final Widget center = switch (_section) {
       _Section.now => NowView(
           wide: true,
+          onOpenPomodoro: () => setState(() => _section = _Section.pomodoro),
           onOpenSchedule: () {},
           onOpenProgress: () => setState(() => _section = _Section.progress),
           onOpenTemplates: () => setState(() => _section = _Section.templates),
         ),
+      _Section.pomodoro => const PomodoroScreen(embedded: true),
       _Section.templates => const TemplatesScreen(embedded: true),
       _Section.progress => const ProgressScreen(embedded: true),
     };
@@ -246,6 +294,7 @@ class _Sidebar extends StatelessWidget {
             ),
           ),
           item(_Section.now, Icons.radio_button_checked_rounded, 'Now'),
+          item(_Section.pomodoro, Icons.timer_outlined, 'Pomodoro'),
           item(_Section.templates, Icons.view_agenda_outlined, 'Templates'),
           item(_Section.progress, Icons.insights_rounded, 'Progress'),
           const Spacer(),

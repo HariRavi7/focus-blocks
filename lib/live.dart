@@ -4,6 +4,7 @@ library;
 
 import 'format.dart';
 import 'models.dart';
+import 'pomodoro.dart';
 import 'schedule_engine.dart';
 
 /// [minutes] after midnight on [day], as a local DateTime.
@@ -133,4 +134,14 @@ LiveStatus liveStatus(DaySnapshot snap, DateTime date) {
     case Phase.empty:
       return LiveStatus(kind: LiveKind.idle, day: day, now: snap.now);
   }
+}
+
+/// The alert for when the running Pomodoro phase ends, or null when the
+/// timer is paused or off.
+PlannedReminder? pomodoroAlert(AppData data) {
+  final t = data.pomodoro;
+  final at = t?.endsAt;
+  if (t == null || at == null) return null;
+  final m = phaseEndMessage(t, data.pomodoroSettings);
+  return PlannedReminder(2, at, m.title, m.body);
 }
